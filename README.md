@@ -6,7 +6,7 @@ https://github.com/vighnesh-007/travel_chat_app/assets/95822134/265355a2-c9ef-4c
 
 ## ✨ Features
 
-- **Voice & Text Input**: Full conversation via voice (Chrome/Edge) or text input (all browsers including Firefox).
+- **Voice & Text Input**: Full conversation via voice (Whisper AI for all browsers) or text input (always available).
 - **Bilingual Support**: Seamlessly switch between English and Japanese for both input and AI responses.
 - **Location-Based Weather**: Automatically extracts location from your query (e.g., "What should I wear in Tokyo?") and fetches real-time weather data from Open-Meteo.
 - **Personalized AI Suggestions**: Uses Groq's Llama 3 model to provide fast, context-aware advice on clothing, activities, and travel.
@@ -28,7 +28,7 @@ https://github.com/vighnesh-007/travel_chat_app/assets/95822134/265355a2-c9ef-4c
 - **AI SDK**: Vercel AI SDK 3.4
 - **Weather API**: Open-Meteo (free, no API key required)
 - **Geocoding**: Nominatim/OpenStreetMap
-- **Voice I/O**: Web Speech API (Chrome/Edge) + Text Input (all browsers)
+- **Voice I/O**: Whisper Large V3 Turbo (Primary) + Web Speech API (Fallback) + Text Input (all browsers)
 - **Deployment**: Vercel
 
 ## ⚙️ Getting Started
@@ -59,14 +59,18 @@ Create a `.env.local` file in the root of the project:
 # Required: Groq API Key
 GROQ_API_KEY=your_groq_api_key_here
 
-# Optional: OpenAI API Key (for Whisper transcription in Firefox)
-# OPENAI_API_KEY=your_openai_api_key_here
+# Optional but Recommended: Hugging Face Token (for Whisper AI transcription - all browsers)
+# Without this, the app will fall back to Web Speech API (Chrome/Edge only) or text input only
+HF_TOKEN=your_huggingface_token_here
 ```
 
 **Get your API keys:**
 
-- Groq (Required): [https://console.groq.com/keys](https://console.groq.com/keys)
-- OpenAI (Optional): [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+- **Groq (Required)**: [https://console.groq.com/keys](https://console.groq.com/keys)
+- **Hugging Face (Recommended)**: [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+  - Enables voice input via Whisper Large V3 Turbo in **all browsers**
+  - More accurate than Web Speech API
+  - Without this, voice input only works in Chrome/Edge
 
 ### 4. Run the development server
 
@@ -82,7 +86,10 @@ The application is a Next.js 15 app with Edge Runtime API routes.
 
 1. **Client (Browser)**:
    - User types or speaks their query (e.g., "What should I wear in Tokyo today?")
-   - Web Speech API (Chrome/Edge) or text input (all browsers)
+   - **Voice Input Architecture**:
+     - **Primary**: Records audio → sends to Whisper Large V3 Turbo via Hugging Face
+     - **Fallback**: Web Speech API (if Whisper unavailable)
+     - **Always Available**: Text input
 2. **Location Extraction**:
    - The API uses Llama 3 to intelligently extract the location from the query
    - Nominatim/OpenStreetMap geocodes the location to coordinates
@@ -96,9 +103,15 @@ The application is a Next.js 15 app with Edge Runtime API routes.
    - Streaming text is displayed in a beautiful chat interface
    - Text-to-Speech reads the response aloud (if supported)
 
-**Key Features:**
+**Voice Recognition Strategy:**
+
+- 🎯 **Primary**: Whisper Large V3 Turbo (Hugging Face) - Works in **all browsers**, more accurate
+- 🔄 **Fallback**: Web Speech API - Only Chrome/Edge, used if Whisper fails
+- ⌨️ **Always Available**: Text input - No API key required
+
+**Other Features:**
 
 - ✅ No geolocation permissions required
-- ✅ Works in any browser (text input)
-- ✅ Voice input in Chrome/Edge
-- ✅ Optional Whisper API support for Firefox voice input
+- ✅ Intelligent location extraction from queries
+- ✅ Real-time streaming responses
+- ✅ Bilingual support (EN/JA)

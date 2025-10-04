@@ -1,54 +1,35 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { Mic, MicOff, Bot, Volume2, Send } from "lucide-react";
+import { Mic, MicOff, Bot, Send } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { LanguageToggle } from "@/components/language-toggle";
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+import { useUnifiedSpeechRecognition } from "@/hooks/use-unified-speech-recognition";
 import { useChat } from "ai/react";
 import type { Message } from "ai";
 import { Button } from "@/components/ui/button";
+import { AudioPlayer } from "@/components/audio-player";
 
 export default function SoraPage() {
   const t = useTranslations("Sora");
   const locale = useLocale();
-  const lastSpokenMessageId = useRef<string | null>(null);
   const [textInput, setTextInput] = useState("");
 
   const {
     isListening,
+    isProcessing,
     transcript,
     error: speechError,
     startListening,
     stopListening,
     setTranscript,
-    isSupported,
-  } = useSpeechRecognition();
-
-  const speak = useCallback((text: string, lang: string) => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = lang;
-      utterance.rate = 1.1;
-      window.speechSynthesis.speak(utterance);
-    }
-  }, []);
+  } = useUnifiedSpeechRecognition();
 
   const { messages, isLoading, append } = useChat({
     api: "/api/getSuggestion",
     body: {
       locale: locale,
-    },
-    onFinish: (message) => {
-      if (
-        message.role === "assistant" &&
-        message.id !== lastSpokenMessageId.current
-      ) {
-        speak(message.content, locale);
-        lastSpokenMessageId.current = message.id;
-      }
     },
   });
 
@@ -60,16 +41,19 @@ export default function SoraPage() {
   }, [textInput, append]);
 
   const handleVoiceInput = useCallback(() => {
-    if (!isListening && transcript) {
+    if (transcript) {
       append({ role: "user", content: transcript });
       setTranscript("");
     }
-  }, [isListening, transcript, append, setTranscript]);
+  }, [transcript, append, setTranscript]);
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     if (isListening) {
-      stopListening();
-      handleVoiceInput();
+      await stopListening();
+      // Wait a bit for processing to complete
+      setTimeout(() => {
+        handleVoiceInput();
+      }, 100);
     } else {
       startListening();
     }
@@ -116,7 +100,7 @@ export default function SoraPage() {
                   </div>
                 )}
                 <div
-                  className={`rounded-2xl px-4 py-3 max-w-[75%] relative group ${
+                  className={`rounded-2xl px-4 py-3 max-w-[75%] ${
                     m.role === "user"
                       ? "bg-primary text-primary-foreground"
                       : "bg-card border shadow-sm"
@@ -124,13 +108,7 @@ export default function SoraPage() {
                 >
                   <p className="whitespace-pre-wrap">{m.content}</p>
                   {m.role === "assistant" && (
-                    <button
-                      onClick={() => speak(m.content, locale)}
-                      className="absolute -right-10 top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                      aria-label="Read aloud"
-                    >
-                      <Volume2 size={18} />
-                    </button>
+                    <AudioPlayer text={m.content} locale={locale} />
                   )}
                 </div>
               </div>
@@ -158,32 +136,40 @@ export default function SoraPage() {
 
           {/* Input area */}
           <div className="border-t bg-background pt-4">
-            {isSupported && (
-              <div className="flex items-center justify-center mb-3">
-                <button
-                  onClick={toggleListening}
-                  disabled={isLoading}
-                  className={`relative flex items-center justify-center w-14 h-14 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
-                    isListening
-                      ? "bg-red-500 scale-110 shadow-lg"
-                      : "bg-primary hover:bg-primary/90 shadow-md"
-                  }`}
-                >
-                  {isListening && (
-                    <div className="absolute w-full h-full bg-red-500 rounded-full animate-ping opacity-75"></div>
-                  )}
-                  {isListening ? (
-                    <MicOff className="w-6 h-6 text-primary-foreground relative z-10" />
-                  ) : (
-                    <Mic className="w-6 h-6 text-primary-foreground relative z-10" />
-                  )}
-                </button>
-              </div>
-            )}
+            <div className="flex items-center justify-center mb-3">
+              <button
+                onClick={toggleListening}
+                disabled={isLoading || isProcessing}
+                className={`relative flex items-center justify-center w-14 h-14 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isListening
+                    ? "bg-red-500 scale-110 shadow-lg"
+                    : "bg-primary hover:bg-primary/90 shadow-md"
+                }`}
+                title={
+                  isProcessing ? "Processing..." : "Record audio (Whisper)"
+                }
+              >
+                {isListening && (
+                  <div className="absolute w-full h-full bg-red-500 rounded-full animate-ping opacity-75"></div>
+                )}
+                {isProcessing ? (
+                  <div className="w-6 h-6 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin relative z-10"></div>
+                ) : isListening ? (
+                  <MicOff className="w-6 h-6 text-primary-foreground relative z-10" />
+                ) : (
+                  <Mic className="w-6 h-6 text-primary-foreground relative z-10" />
+                )}
+              </button>
+            </div>
 
-            {isListening && transcript && (
+            {(isListening || isProcessing) && (
               <div className="mb-2 px-4 py-2 bg-muted/50 rounded-lg text-sm text-muted-foreground italic">
-                &ldquo;{transcript}&rdquo;
+                {isListening
+                  ? "Recording..."
+                  : isProcessing
+                  ? "Transcribing with Whisper..."
+                  : ""}
+                {transcript && ` "${transcript}"`}
               </div>
             )}
 
