@@ -6,6 +6,7 @@
     "listening": "Listening...",
     "speak_button": "Click the mic to speak or type below",
     "send": "Send",
+    "clear_chat": "Clear Chat",
     "thinking": "Thinking...",
     "error_generic": "Oops! Something went wrong. Please try again.",
     "error_speech_not_supported": "Speech recognition not supported in this browser. Please use text input or try Chrome."

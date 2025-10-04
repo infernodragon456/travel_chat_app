@@ -2,14 +2,15 @@
 
 import { useState, useCallback } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { Mic, MicOff, Bot, Send } from "lucide-react";
+import { Mic, MicOff, Bot, Send, Trash2 } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { LanguageToggle } from "@/components/language-toggle";
 import { useUnifiedSpeechRecognition } from "@/hooks/use-unified-speech-recognition";
 import { useChat } from "ai/react";
 import type { Message } from "ai";
 import { Button } from "@/components/ui/button";
-import { AudioPlayer } from "@/components/audio-player";
+import { EnhancedAudioPlayer } from "@/components/enhanced-audio-player";
+import { usePersistedChat } from "@/hooks/use-persisted-chat";
 
 export default function SoraPage() {
   const t = useTranslations("Sora");
@@ -26,12 +27,14 @@ export default function SoraPage() {
     setTranscript,
   } = useUnifiedSpeechRecognition();
 
-  const { messages, isLoading, append } = useChat({
+  const { messages, isLoading, append, setMessages } = useChat({
     api: "/api/getSuggestion",
     body: {
       locale: locale,
     },
   });
+
+  const { clearChat } = usePersistedChat(locale, messages, setMessages);
 
   const handleSendMessage = useCallback(() => {
     if (textInput.trim()) {
@@ -71,6 +74,18 @@ export default function SoraPage() {
       <header className="sticky top-0 z-10 flex items-center justify-between p-4 border-b bg-background/80 backdrop-blur-sm">
         <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
         <div className="flex items-center gap-2">
+          {messages.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearChat}
+              className="gap-2"
+              title={t("clear_chat")}
+            >
+              <Trash2 className="h-4 w-4" />
+              <span className="hidden sm:inline">{t("clear_chat")}</span>
+            </Button>
+          )}
           <LanguageToggle />
           <ModeToggle />
         </div>
@@ -108,7 +123,11 @@ export default function SoraPage() {
                 >
                   <p className="whitespace-pre-wrap">{m.content}</p>
                   {m.role === "assistant" && (
-                    <AudioPlayer text={m.content} locale={locale} />
+                    <EnhancedAudioPlayer
+                      text={m.content}
+                      locale={locale}
+                      messageId={m.id}
+                    />
                   )}
                 </div>
               </div>

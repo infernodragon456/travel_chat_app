@@ -59,18 +59,29 @@ Create a `.env.local` file in the root of the project:
 # Required: Groq API Key
 GROQ_API_KEY=your_groq_api_key_here
 
-# Optional but Recommended: Hugging Face Token (for Whisper AI transcription - all browsers)
-# Without this, the app will fall back to Web Speech API (Chrome/Edge only) or text input only
+# Recommended: Hugging Face Token (for Whisper AI voice transcription)
+# Enables voice input via Whisper Large V3 Turbo in all browsers
 HF_TOKEN=your_huggingface_token_here
+
+# Recommended: ElevenLabs API Key (for high-quality Japanese & English voice output)
+# Simple API key authentication, excellent multilingual support
+ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
 ```
 
 **Get your API keys:**
 
 - **Groq (Required)**: [https://console.groq.com/keys](https://console.groq.com/keys)
 - **Hugging Face (Recommended)**: [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
-  - Enables voice input via Whisper Large V3 Turbo in **all browsers**
-  - More accurate than Web Speech API
+  - **Voice Input**: Whisper Large V3 Turbo for speech-to-text
+  - Works in **all browsers** (Chrome, Firefox, Safari, Edge)
+  - **FREE** with generous rate limits
   - Without this, voice input only works in Chrome/Edge
+- **ElevenLabs (Recommended)**: [https://elevenlabs.io/app/settings/api-keys](https://elevenlabs.io/app/settings/api-keys)
+  - **Voice Output**: Premium AI voices with multilingual support
+  - Excellent Japanese & English pronunciation
+  - Simple API key authentication (works with Edge Runtime)
+  - Free tier: 10,000 characters/month, then ~$1/10K characters
+  - Without this, falls back to Web Speech API (limited Japanese support)
 
 ### 4. Run the development server
 
