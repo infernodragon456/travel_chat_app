@@ -1,7 +1,5 @@
-// API endpoint for Whisper-based transcription (Firefox support)
-// Uses Hugging Face Inference API with Whisper Large V3 Turbo
-import { InferenceClient } from "@huggingface/inference";
-
+// API endpoint for Whisper-based transcription using official Hugging Face Inference API
+// Uses direct fetch to HF Inference API with proper FormData format
 export const runtime = "edge";
 
 export async function POST(req: Request) {
@@ -54,45 +52,69 @@ export async function POST(req: Request) {
       );
     }
 
-    // Initialize Hugging Face Inference Client
-    const client = new InferenceClient(process.env.HF_TOKEN);
-
-    // Convert to Blob while PRESERVING the MIME type
-    // ArrayBuffer loses MIME type info, which causes "Content type None" error
-    const audioBuffer = await audioFile.arrayBuffer();
-    const audioBlob = new Blob([audioBuffer], { type: audioFile.type });
-
-    console.log("📊 Audio blob for HF:", {
-      size: audioBlob.size,
-      type: audioBlob.type,
-    });
-
     // Get locale from form data (if provided)
     const locale = (formData.get("locale") as string) || "en";
     const languageCode = locale === "ja" ? "japanese" : "english";
 
     console.log("🌐 Transcribing in:", languageCode);
 
-    // Transcribe using Whisper Large V3 Turbo via Hugging Face
-    // Note: HF Inference API doesn't support language parameter directly
-    // The model should auto-detect, but we log it for debugging
-    const result = await client.automaticSpeechRecognition({
-      data: audioBlob,
-      model: "openai/whisper-large-v3",
+    // Convert audio file to ArrayBuffer for binary upload
+    const audioBuffer = await audioFile.arrayBuffer();
+
+    console.log("📤 Sending to HF Inference API:", {
+      fileName: audioFile.name,
+      fileType: audioFile.type,
+      fileSize: audioFile.size,
+      bufferSize: audioBuffer.byteLength,
     });
 
+    // Call Hugging Face Inference API with binary audio data
+    const response = await fetch(
+      "https://api-inference.huggingface.co/models/openai/whisper-large-v3",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.HF_TOKEN}`,
+          "Content-Type": "audio/wav", // Send as binary audio data
+        },
+        body: audioBuffer, // Send raw binary data
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ HF API error:", response.status, errorText);
+      return new Response(
+        JSON.stringify({
+          error: `Hugging Face API error: ${response.status} ${errorText}`,
+        }),
+        { status: response.status, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const result = await response.json();
     console.log("✅ Transcription result:", result);
+
+    // Extract text from HF API response
+    let transcriptionText = "";
+    if (result.text) {
+      transcriptionText = result.text;
+    } else if (result.transcription) {
+      transcriptionText = result.transcription;
+    } else if (typeof result === "string") {
+      transcriptionText = result;
+    }
 
     // Check if transcription is suspiciously short (hallucination detection)
     if (
-      result.text &&
-      result.text.trim().length < 3 &&
+      transcriptionText &&
+      transcriptionText.trim().length < 3 &&
       audioFile.size > 10000
     ) {
       console.warn("⚠️ Suspicious transcription (too short for audio size)");
     }
 
-    return new Response(JSON.stringify({ text: result.text }), {
+    return new Response(JSON.stringify({ text: transcriptionText }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

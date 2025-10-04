@@ -6,12 +6,21 @@ import { useLocale, useTranslations } from "next-intl";
 // ================== HELPER FUNCTIONS (RE-ADDED) ==================
 
 /**
- * Encodes a raw AudioBuffer into a WAV file (Blob).
+ * Encodes a raw AudioBuffer into a WAV file (Blob) optimized for Whisper.
+ * Converts to mono, 16kHz sample rate for better Whisper compatibility.
  */
 function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
-  const numberOfChannels = audioBuffer.numberOfChannels;
-  const sampleRate = audioBuffer.sampleRate;
-  const length = audioBuffer.length;
+  // Whisper works best with mono, 16kHz audio
+  const targetSampleRate = 16000;
+  const numberOfChannels = 1; // Convert to mono
+  
+  // Resample if needed
+  let processedBuffer = audioBuffer;
+  if (audioBuffer.sampleRate !== targetSampleRate || audioBuffer.numberOfChannels !== numberOfChannels) {
+    processedBuffer = resampleAudioBuffer(audioBuffer, targetSampleRate, numberOfChannels);
+  }
+  
+  const length = processedBuffer.length;
   const buffer = new ArrayBuffer(44 + length * numberOfChannels * 2);
   const view = new DataView(buffer);
 
@@ -27,12 +36,12 @@ function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
   writeString(8, "WAVE");
   writeString(12, "fmt ");
   view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
+  view.setUint16(20, 1, true); // PCM format
   view.setUint16(22, numberOfChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * numberOfChannels * 2, true);
+  view.setUint32(24, targetSampleRate, true);
+  view.setUint32(28, targetSampleRate * numberOfChannels * 2, true);
   view.setUint16(32, numberOfChannels * 2, true);
-  view.setUint16(34, 16, true);
+  view.setUint16(34, 16, true); // 16-bit
   writeString(36, "data");
   view.setUint32(40, length * numberOfChannels * 2, true);
 
@@ -42,7 +51,7 @@ function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
     for (let channel = 0; channel < numberOfChannels; channel++) {
       const sample = Math.max(
         -1,
-        Math.min(1, audioBuffer.getChannelData(channel)[i])
+        Math.min(1, processedBuffer.getChannelData(channel)[i])
       );
       view.setInt16(
         offset,
@@ -54,6 +63,51 @@ function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
   }
 
   return new Blob([buffer], { type: "audio/wav" });
+}
+
+/**
+ * Simple resampling function to convert audio to target sample rate and channels.
+ * This is a basic implementation - for production use, consider a more sophisticated resampler.
+ */
+function resampleAudioBuffer(
+  audioBuffer: AudioBuffer, 
+  targetSampleRate: number, 
+  targetChannels: number
+): AudioBuffer {
+  const AudioContextClass =
+    window.AudioContext ||
+    (window as typeof window & { webkitAudioContext: typeof AudioContext })
+      .webkitAudioContext;
+  const audioContext = new AudioContextClass({ sampleRate: targetSampleRate });
+  
+  const ratio = audioBuffer.sampleRate / targetSampleRate;
+  const newLength = Math.floor(audioBuffer.length / ratio);
+  
+  const newBuffer = audioContext.createBuffer(targetChannels, newLength, targetSampleRate);
+  
+  // Convert to mono if needed
+  if (targetChannels === 1 && audioBuffer.numberOfChannels > 1) {
+    const mixedChannel = newBuffer.getChannelData(0);
+    for (let i = 0; i < newLength; i++) {
+      let sum = 0;
+      for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+        const sourceIndex = Math.floor(i * ratio);
+        sum += audioBuffer.getChannelData(channel)[sourceIndex];
+      }
+      mixedChannel[i] = sum / audioBuffer.numberOfChannels;
+    }
+  } else {
+    // Copy first channel
+    const sourceChannel = audioBuffer.getChannelData(0);
+    const targetChannel = newBuffer.getChannelData(0);
+    for (let i = 0; i < newLength; i++) {
+      const sourceIndex = Math.floor(i * ratio);
+      targetChannel[i] = sourceChannel[sourceIndex];
+    }
+  }
+  
+  audioContext.close();
+  return newBuffer;
 }
 
 /**
@@ -133,14 +187,17 @@ export const useUnifiedSpeechRecognition = () => {
   const transcribeWithWhisper = useCallback(
     async (audioBlob: Blob): Promise<string | null> => {
       try {
-        console.log("🔄 Converting audio to WAV for compatibility...");
-        // ================== FIX IS HERE ==================
-        // Convert the recorded blob to WAV format before sending.
+        console.log("🔄 Converting audio to optimized WAV (mono, 16kHz) for Whisper...");
+        // ================== OPTIMIZED FOR WHISPER ==================
+        // Convert the recorded blob to WAV format optimized for Whisper:
+        // - Mono channel (better for speech recognition)
+        // - 16kHz sample rate (optimal for Whisper)
+        // - 16-bit PCM encoding
         const wavBlob = await convertToWav(audioBlob);
         const audioFile = new File([wavBlob], "recording.wav", {
           type: "audio/wav",
         });
-        // ================== END OF FIX ===================
+        // ================== END OF OPTIMIZATION ===================
 
         console.log("📤 Sending WAV audio to Whisper API:", {
           name: audioFile.name,
@@ -245,48 +302,55 @@ export const useUnifiedSpeechRecognition = () => {
   }, [t]);
 
   // Stop recording and transcribe
-  const stopListening = useCallback(async () => {
-    // ... (This function remains the same, except for logging)
-    if (
-      !mediaRecorderRef.current ||
-      mediaRecorderRef.current.state === "inactive"
-    ) {
-      return;
-    }
-
-    mediaRecorderRef.current.onstop = async () => {
-      setIsListening(false);
-      setIsProcessing(true);
-      const audioBlob = new Blob(audioChunksRef.current, {
-        type: mediaRecorderRef.current?.mimeType ?? "audio/webm",
-      });
-      console.log("🎵 Original audio blob created:", {
-        size: `${(audioBlob.size / 1024).toFixed(2)} KB`,
-        type: audioBlob.type,
-      });
-
-      audioChunksRef.current = [];
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-
-      if (audioBlob.size < 1000) {
-        setError("Recording too short.");
-        setIsProcessing(false);
+  const stopListening = useCallback(async (): Promise<string | null> => {
+    return new Promise((resolve) => {
+      if (
+        !mediaRecorderRef.current ||
+        mediaRecorderRef.current.state === "inactive"
+      ) {
+        resolve(null);
         return;
       }
 
-      let transcription = await transcribeWithWhisper(audioBlob);
-      if (!transcription) {
-        transcription = await transcribeWithWebSpeech();
-      }
-      if (transcription) {
-        setTranscript(transcription);
-      } else {
-        setError(t("error_generic"));
-      }
-      setIsProcessing(false);
-    };
+      mediaRecorderRef.current.onstop = async () => {
+        setIsListening(false);
+        setIsProcessing(true);
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: mediaRecorderRef.current?.mimeType ?? "audio/webm",
+        });
+        console.log("🎵 Original audio blob created:", {
+          size: `${(audioBlob.size / 1024).toFixed(2)} KB`,
+          type: audioBlob.type,
+        });
 
-    mediaRecorderRef.current.stop();
+        audioChunksRef.current = [];
+        streamRef.current?.getTracks().forEach((track) => track.stop());
+
+        if (audioBlob.size < 1000) {
+          setError("Recording too short.");
+          setIsProcessing(false);
+          resolve(null);
+          return;
+        }
+
+        let transcription = await transcribeWithWhisper(audioBlob);
+        if (!transcription) {
+          transcription = await transcribeWithWebSpeech();
+        }
+        if (transcription) {
+          setTranscript(transcription);
+          console.log("✅ Transcription completed:", transcription);
+          setIsProcessing(false);
+          resolve(transcription);
+        } else {
+          setError(t("error_generic"));
+          setIsProcessing(false);
+          resolve(null);
+        }
+      };
+
+      mediaRecorderRef.current.stop();
+    });
   }, [transcribeWithWhisper, transcribeWithWebSpeech, t]);
 
   return {

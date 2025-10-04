@@ -43,20 +43,15 @@ export default function SoraPage() {
     }
   }, [textInput, append]);
 
-  const handleVoiceInput = useCallback(() => {
-    if (transcript) {
-      append({ role: "user", content: transcript });
-      setTranscript("");
-    }
-  }, [transcript, append, setTranscript]);
 
   const toggleListening = async () => {
     if (isListening) {
-      await stopListening();
-      // Wait a bit for processing to complete
-      setTimeout(() => {
-        handleVoiceInput();
-      }, 100);
+      const transcription = await stopListening();
+      if (transcription) {
+        // Send the transcribed text directly to the chat
+        append({ role: "user", content: transcription });
+        setTranscript(""); // Clear the transcript after sending
+      }
     } else {
       startListening();
     }
