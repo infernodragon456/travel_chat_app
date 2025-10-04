@@ -8,10 +8,7 @@ const intlMiddleware = createMiddleware({
 });
 
 export default function middleware(request: NextRequest) {
-  console.log("🔍 Middleware hit:", request.nextUrl.pathname);
-  const response = intlMiddleware(request);
-  console.log("✅ Middleware response status:", response.status);
-  return response;
+  return intlMiddleware(request);
 }
 
 export const config = {

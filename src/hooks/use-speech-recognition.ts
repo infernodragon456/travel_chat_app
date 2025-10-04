@@ -57,6 +57,7 @@ export const useSpeechRecognition = () => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isSupported, setIsSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
@@ -67,8 +68,11 @@ export const useSpeechRecognition = () => {
 
     if (!SpeechRecognition) {
       setError("Speech recognition not supported in this browser.");
+      setIsSupported(false);
       return;
     }
+
+    setIsSupported(true);
 
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
@@ -121,5 +125,6 @@ export const useSpeechRecognition = () => {
     startListening,
     stopListening,
     setTranscript,
+    isSupported,
   };
 };

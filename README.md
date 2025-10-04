@@ -6,12 +6,13 @@ https://github.com/vighnesh-007/travel_chat_app/assets/95822134/265355a2-c9ef-4c
 
 ## ✨ Features
 
-- **Voice-Driven Interaction**: Full conversation loop (input and output) is handled by voice.
-- **Bilingual Support**: Seamlessly switch between English and Japanese for both voice recognition and AI responses.
-- **Real-Time Weather**: Integrates with the Open-Meteo API to fetch live weather data based on the user's location.
-- **Personalized AI Suggestions**: Uses Groq's Llama 3 model to provide fast, context-aware advice on clothing, activities, and more.
-- **Dynamic UI**: Built with Next.js, Tailwind CSS, and shadcn/ui for a modern, responsive, and aesthetically pleasing interface with light/dark modes.
-- **Streaming Responses**: AI responses are streamed token-by-token for an engaging user experience.
+- **Voice & Text Input**: Full conversation via voice (Chrome/Edge) or text input (all browsers including Firefox).
+- **Bilingual Support**: Seamlessly switch between English and Japanese for both input and AI responses.
+- **Location-Based Weather**: Automatically extracts location from your query (e.g., "What should I wear in Tokyo?") and fetches real-time weather data from Open-Meteo.
+- **Personalized AI Suggestions**: Uses Groq's Llama 3 model to provide fast, context-aware advice on clothing, activities, and travel.
+- **Modern UI**: Built with Next.js 15, Tailwind CSS, and shadcn/ui for a beautiful, responsive interface with light/dark modes.
+- **Streaming Responses**: AI responses are streamed token-by-token for an engaging, real-time experience.
+- **Privacy-First**: No geolocation permissions required - just mention a city in your query.
 
 ## 🚀 Live Demo
 
@@ -19,14 +20,15 @@ https://github.com/vighnesh-007/travel_chat_app/assets/95822134/265355a2-c9ef-4c
 
 ## 🛠️ Tech Stack
 
-- **Framework**: Next.js 14 (App Router)
-- **Styling**: Tailwind CSS & shadcn/ui
-- **State Management**: React Hooks
-- **Internationalization**: `next-intl`
-- **Generative AI**: Groq API (Llama 3 8B)
-- **AI SDK**: Vercel AI SDK 3.0
-- **Weather API**: Open-Meteo
-- **Voice I/O**: Web Speech API (SpeechRecognition & SpeechSynthesis)
+- **Framework**: Next.js 15 (App Router)
+- **Styling**: Tailwind CSS 4 & shadcn/ui
+- **State Management**: React 19 Hooks
+- **Internationalization**: next-intl 4.x
+- **Generative AI**: Groq API (Llama 3.1 8B Instant)
+- **AI SDK**: Vercel AI SDK 3.4
+- **Weather API**: Open-Meteo (free, no API key required)
+- **Geocoding**: Nominatim/OpenStreetMap
+- **Voice I/O**: Web Speech API (Chrome/Edge) + Text Input (all browsers)
 - **Deployment**: Vercel
 
 ## ⚙️ Getting Started
@@ -51,13 +53,20 @@ npm install
 
 ### 3. Set up environment variables
 
-Create a `.env.local` file in the root of the project and add your Groq API key:
+Create a `.env.local` file in the root of the project:
 
-```.env.local
-GROQ_API_KEY="YOUR_GROQ_API_KEY_HERE"
+```bash
+# Required: Groq API Key
+GROQ_API_KEY=your_groq_api_key_here
+
+# Optional: OpenAI API Key (for Whisper transcription in Firefox)
+# OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-You can get a free API key from the [Groq Console](https://console.groq.com/keys).
+**Get your API keys:**
+
+- Groq (Required): [https://console.groq.com/keys](https://console.groq.com/keys)
+- OpenAI (Optional): [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 
 ### 4. Run the development server
 
@@ -69,14 +78,27 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to see the a
 
 ## 🏗️ System Architecture
 
-The application is a monolithic Next.js app.
+The application is a Next.js 15 app with Edge Runtime API routes.
 
-1.  **Client (Browser)**: The user clicks the microphone button. The Web Speech API listens for voice input in the selected language.
-2.  **Geolocation**: Upon successful transcription, the browser's Geolocation API fetches the user's coordinates.
-3.  **API Request**: The frontend sends the transcribed text, coordinates, and locale to a Next.js API Route (`/api/getSuggestion`).
-4.  **Server (Vercel Function)**:
-    a. The API route fetches real-time weather data from Open-Meteo.
-    b. It constructs a detailed system prompt containing the weather data and the user's query.
-    c. It sends this prompt to the Groq API using the Vercel AI SDK.
-5.  **Streaming Response**: The server streams the LLM's response back to the client.
-6.  **Text-to-Speech**: The frontend displays the streaming text. Once complete, it uses the Web Speech API to read the text aloud in the appropriate language.
+1. **Client (Browser)**:
+   - User types or speaks their query (e.g., "What should I wear in Tokyo today?")
+   - Web Speech API (Chrome/Edge) or text input (all browsers)
+2. **Location Extraction**:
+   - The API uses Llama 3 to intelligently extract the location from the query
+   - Nominatim/OpenStreetMap geocodes the location to coordinates
+3. **Weather Fetching**:
+   - Open-Meteo API fetches real-time weather data for the location
+4. **AI Response**:
+   - The server constructs a detailed prompt with weather data
+   - Groq API (Llama 3.1 8B Instant) generates personalized suggestions
+   - Response is streamed token-by-token back to the client
+5. **Output**:
+   - Streaming text is displayed in a beautiful chat interface
+   - Text-to-Speech reads the response aloud (if supported)
+
+**Key Features:**
+
+- ✅ No geolocation permissions required
+- ✅ Works in any browser (text input)
+- ✅ Voice input in Chrome/Edge
+- ✅ Optional Whisper API support for Firefox voice input

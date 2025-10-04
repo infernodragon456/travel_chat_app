@@ -2,11 +2,12 @@
   "Sora": {
     "title": "Sora",
     "subtitle": "Your AI-powered weather and lifestyle assistant",
-    "placeholder": "Ask me what to wear or what to do today...",
+    "placeholder": "Ask about weather in any city (e.g., 'What should I wear in Tokyo today?')",
     "listening": "Listening...",
-    "speak_button": "Click the mic to speak",
+    "speak_button": "Click the mic to speak or type below",
+    "send": "Send",
     "thinking": "Thinking...",
     "error_generic": "Oops! Something went wrong. Please try again.",
-    "error_permission": "I need your location to give the best advice. Please allow location access."
+    "error_speech_not_supported": "Speech recognition not supported in this browser. Please use text input or try Chrome."
   }
 }
