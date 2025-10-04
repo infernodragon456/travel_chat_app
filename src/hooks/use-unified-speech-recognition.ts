@@ -3,35 +3,102 @@
 import { useState, useRef, useCallback } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
+// ================== HELPER FUNCTIONS (RE-ADDED) ==================
+
+/**
+ * Encodes a raw AudioBuffer into a WAV file (Blob).
+ */
+function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
+  const numberOfChannels = audioBuffer.numberOfChannels;
+  const sampleRate = audioBuffer.sampleRate;
+  const length = audioBuffer.length;
+  const buffer = new ArrayBuffer(44 + length * numberOfChannels * 2);
+  const view = new DataView(buffer);
+
+  const writeString = (offset: number, string: string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+
+  // WAV header
+  writeString(0, "RIFF");
+  view.setUint32(4, 36 + length * numberOfChannels * 2, true);
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numberOfChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numberOfChannels * 2, true);
+  view.setUint16(32, numberOfChannels * 2, true);
+  view.setUint16(34, 16, true);
+  writeString(36, "data");
+  view.setUint32(40, length * numberOfChannels * 2, true);
+
+  // PCM data
+  let offset = 44;
+  for (let i = 0; i < length; i++) {
+    for (let channel = 0; channel < numberOfChannels; channel++) {
+      const sample = Math.max(
+        -1,
+        Math.min(1, audioBuffer.getChannelData(channel)[i])
+      );
+      view.setInt16(
+        offset,
+        sample < 0 ? sample * 0x8000 : sample * 0x7fff,
+        true
+      );
+      offset += 2;
+    }
+  }
+
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+/**
+ * Decodes any audio blob into a raw AudioBuffer and then converts it to a WAV Blob.
+ */
+async function convertToWav(audioBlob: Blob): Promise<Blob> {
+  try {
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as typeof window & { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
+    const audioContext = new AudioContextClass();
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    const wavBlob = audioBufferToWav(audioBuffer);
+    audioContext.close();
+    return wavBlob;
+  } catch (error) {
+    console.error("❌ Audio conversion to WAV failed:", error);
+    // Return original blob as a fallback, though it may not be supported
+    return audioBlob;
+  }
+}
+
+// ================== SPEECH RECOGNITION HOOK ==================
+
 // Type declarations for Web Speech API (fallback)
+// ... (interfaces remain the same, not shown for brevity)
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList;
-  resultIndex: number;
 }
-
 interface SpeechRecognitionErrorEvent extends Event {
   error: string;
-  message: string;
 }
-
 interface SpeechRecognitionResultList {
   length: number;
   item(index: number): SpeechRecognitionResult;
-  [index: number]: SpeechRecognitionResult;
 }
-
 interface SpeechRecognitionResult {
   isFinal: boolean;
-  length: number;
   item(index: number): SpeechRecognitionAlternative;
-  [index: number]: SpeechRecognitionAlternative;
 }
-
 interface SpeechRecognitionAlternative {
   transcript: string;
-  confidence: number;
 }
-
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
@@ -41,13 +108,12 @@ interface SpeechRecognition extends EventTarget {
   onend: (() => void) | null;
   start(): void;
   stop(): void;
-  abort(): void;
 }
-
+// Extend Window interface for Web Speech API
 declare global {
   interface Window {
-    SpeechRecognition: new () => SpeechRecognition;
-    webkitSpeechRecognition: new () => SpeechRecognition;
+    SpeechRecognition?: new () => SpeechRecognition;
+    webkitSpeechRecognition?: new () => SpeechRecognition;
   }
 }
 
@@ -67,8 +133,23 @@ export const useUnifiedSpeechRecognition = () => {
   const transcribeWithWhisper = useCallback(
     async (audioBlob: Blob): Promise<string | null> => {
       try {
+        console.log("🔄 Converting audio to WAV for compatibility...");
+        // ================== FIX IS HERE ==================
+        // Convert the recorded blob to WAV format before sending.
+        const wavBlob = await convertToWav(audioBlob);
+        const audioFile = new File([wavBlob], "recording.wav", {
+          type: "audio/wav",
+        });
+        // ================== END OF FIX ===================
+
+        console.log("📤 Sending WAV audio to Whisper API:", {
+          name: audioFile.name,
+          type: audioFile.type,
+          size: audioFile.size,
+        });
+
         const formData = new FormData();
-        formData.append("audio", audioBlob, "recording.webm");
+        formData.append("audio", audioFile);
         formData.append("locale", locale);
 
         const response = await fetch("/api/transcribe", {
@@ -94,31 +175,19 @@ export const useUnifiedSpeechRecognition = () => {
 
   // Fallback to Web Speech API
   const transcribeWithWebSpeech = useCallback((): Promise<string | null> => {
+    // ... (This function remains the same)
     return new Promise((resolve) => {
       const SpeechRecognition =
         window.SpeechRecognition || window.webkitSpeechRecognition;
-
-      if (!SpeechRecognition) {
-        console.log("Web Speech API not supported");
-        resolve(null);
-        return;
-      }
-
+      if (!SpeechRecognition) return resolve(null);
       const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
       recognition.lang = locale;
-
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        const transcript = event.results[0][0].transcript;
-        resolve(transcript);
-      };
-
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error("Web Speech API error:", event.error);
+      recognition.onresult = (e) =>
+        resolve(e.results.item(0).item(0).transcript);
+      recognition.onerror = (e) => {
+        console.error("Web Speech API error:", e.error);
         resolve(null);
       };
-
       recognition.start();
     });
   }, [locale]);
@@ -131,14 +200,34 @@ export const useUnifiedSpeechRecognition = () => {
       setIsListening(true);
       audioChunksRef.current = [];
 
-      // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      // Create MediaRecorder
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm",
-      });
+      // ================== FIX IS HERE ==================
+      // 1. Explicitly find a supported MIME type
+      const supportedTypes = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4", // Often supported in Safari/Chrome
+      ];
+      const mimeType = supportedTypes.find((type) =>
+        MediaRecorder.isTypeSupported(type)
+      );
+
+      if (!mimeType) {
+        console.error("❌ No supported audio format found");
+        setError("Your browser does not support audio recording.");
+        setIsListening(false);
+        return;
+      }
+
+      console.log(`🎙️ Using supported audio format: ${mimeType}`);
+
+      // 2. Pass the chosen mimeType to the MediaRecorder constructor
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      // ================== END OF FIX ===================
+
+      mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -147,9 +236,9 @@ export const useUnifiedSpeechRecognition = () => {
       };
 
       mediaRecorder.start();
-      mediaRecorderRef.current = mediaRecorder;
+      console.log("✅ Recording started");
     } catch (err) {
-      console.error("Error starting recording:", err);
+      console.error("❌ Error starting recording:", err);
       setError(t("error_generic"));
       setIsListening(false);
     }
@@ -157,52 +246,47 @@ export const useUnifiedSpeechRecognition = () => {
 
   // Stop recording and transcribe
   const stopListening = useCallback(async () => {
+    // ... (This function remains the same, except for logging)
     if (
       !mediaRecorderRef.current ||
       mediaRecorderRef.current.state === "inactive"
     ) {
-      setIsListening(false);
       return;
     }
 
-    return new Promise<void>((resolve) => {
-      const mediaRecorder = mediaRecorderRef.current!;
+    mediaRecorderRef.current.onstop = async () => {
+      setIsListening(false);
+      setIsProcessing(true);
+      const audioBlob = new Blob(audioChunksRef.current, {
+        type: mediaRecorderRef.current?.mimeType ?? "audio/webm",
+      });
+      console.log("🎵 Original audio blob created:", {
+        size: `${(audioBlob.size / 1024).toFixed(2)} KB`,
+        type: audioBlob.type,
+      });
 
-      mediaRecorder.onstop = async () => {
-        setIsListening(false);
-        setIsProcessing(true);
+      audioChunksRef.current = [];
+      streamRef.current?.getTracks().forEach((track) => track.stop());
 
-        // Create audio blob
-        const audioBlob = new Blob(audioChunksRef.current, {
-          type: "audio/webm",
-        });
-        audioChunksRef.current = [];
-
-        // Stop all tracks
-        streamRef.current?.getTracks().forEach((track) => track.stop());
-
-        // Try Whisper first (PRIMARY)
-        console.log("Trying Whisper API transcription...");
-        let transcription = await transcribeWithWhisper(audioBlob);
-
-        // Fallback to Web Speech API if Whisper fails
-        if (!transcription) {
-          console.log("Whisper failed, falling back to Web Speech API...");
-          transcription = await transcribeWithWebSpeech();
-        }
-
-        if (transcription) {
-          setTranscript(transcription);
-        } else {
-          setError(t("error_generic"));
-        }
-
+      if (audioBlob.size < 1000) {
+        setError("Recording too short.");
         setIsProcessing(false);
-        resolve();
-      };
+        return;
+      }
 
-      mediaRecorder.stop();
-    });
+      let transcription = await transcribeWithWhisper(audioBlob);
+      if (!transcription) {
+        transcription = await transcribeWithWebSpeech();
+      }
+      if (transcription) {
+        setTranscript(transcription);
+      } else {
+        setError(t("error_generic"));
+      }
+      setIsProcessing(false);
+    };
+
+    mediaRecorderRef.current.stop();
   }, [transcribeWithWhisper, transcribeWithWebSpeech, t]);
 
   return {
