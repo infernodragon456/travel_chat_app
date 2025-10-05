@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Mic, MicOff, Bot, Send, Trash2 } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -11,6 +11,18 @@ import type { Message } from "ai";
 import { Button } from "@/components/ui/button";
 import { EnhancedAudioPlayer } from "@/components/enhanced-audio-player";
 import { usePersistedChat } from "@/hooks/use-persisted-chat";
+import { WebResultCards } from "@/components/web-result-cards";
+
+interface WebSearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+  image?: string;
+}
+
+interface ExtendedMessage extends Message {
+  webSearchResults?: WebSearchResult[];
+}
 
 export default function SoraPage() {
   const t = useTranslations("Sora");
@@ -32,9 +44,111 @@ export default function SoraPage() {
     body: {
       locale: locale,
     },
+    onResponse: async (response) => {
+      console.log('onResponse callback triggered!', response);
+    },
+    onFinish: async (message) => {
+      console.log('onFinish callback triggered!', message);
+      // Fetch web search results for the user message that triggered this response
+      if (message.role === 'assistant') {
+        try {
+          // Get the user message that triggered this assistant response
+          const userMessage = messages[messages.length - 1]?.content;
+          console.log('onFinish triggered for assistant message');
+          console.log('User message that triggered this response:', userMessage);
+          
+          if (userMessage) {
+            const response = await fetch('/api/webSearch', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                query: userMessage,
+                locale: locale,
+              }),
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              const webSearchResults = data.results || [];
+              console.log('Web search results:', webSearchResults);
+              
+              if (webSearchResults.length > 0) {
+                // Use setTimeout to ensure the message has been added to the state
+                setTimeout(() => {
+                  setMessages(prev => {
+                    const updated = [...prev];
+                    const lastMessage = updated[updated.length - 1];
+                    if (lastMessage && lastMessage.role === 'assistant' && lastMessage.id === message.id) {
+                      updated[updated.length - 1] = {
+                        ...lastMessage,
+                        webSearchResults: webSearchResults
+                      } as ExtendedMessage;
+                    }
+                    return updated;
+                  });
+                  console.log('Updated message with web search results');
+                }, 100);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching web search results:', error);
+        }
+      }
+    },
   });
 
   const { clearChat } = usePersistedChat(locale, messages, setMessages);
+
+  // Effect to handle web search when a new assistant message is added
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.role === 'assistant' && !(lastMessage as ExtendedMessage).webSearchResults) {
+      console.log('New assistant message detected, triggering web search');
+      
+      // Get the user message that triggered this response
+      const userMessage = messages[messages.length - 2]?.content;
+      console.log('User message for web search:', userMessage);
+      
+      if (userMessage) {
+        fetch('/api/webSearch', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: userMessage,
+            locale: locale,
+          }),
+        })
+        .then(response => response.json())
+        .then(data => {
+          const webSearchResults = data.results || [];
+          console.log('Web search results:', webSearchResults);
+          
+          if (webSearchResults.length > 0) {
+            setMessages(prev => {
+              const updated = [...prev];
+              const lastMsg = updated[updated.length - 1];
+              if (lastMsg && lastMsg.role === 'assistant' && lastMsg.id === lastMessage.id) {
+                updated[updated.length - 1] = {
+                  ...lastMsg,
+                  webSearchResults: webSearchResults
+                } as ExtendedMessage;
+              }
+              return updated;
+            });
+            console.log('Updated message with web search results');
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching web search results:', error);
+        });
+      }
+    }
+  }, [messages, locale, setMessages]);
 
   const handleSendMessage = useCallback(() => {
     if (textInput.trim()) {
@@ -97,7 +211,7 @@ export default function SoraPage() {
               </div>
             )}
 
-            {messages.map((m: Message) => (
+            {messages.map((m: ExtendedMessage) => (
               <div
                 key={m.id}
                 className={`flex gap-3 items-start ${
@@ -118,11 +232,16 @@ export default function SoraPage() {
                 >
                   <p className="whitespace-pre-wrap">{m.content}</p>
                   {m.role === "assistant" && (
-                    <EnhancedAudioPlayer
-                      text={m.content}
-                      locale={locale}
-                      messageId={m.id}
-                    />
+                    <>
+                      <EnhancedAudioPlayer
+                        text={m.content}
+                        locale={locale}
+                        messageId={m.id}
+                      />
+                      {m.webSearchResults && m.webSearchResults.length > 0 && (
+                        <WebResultCards results={m.webSearchResults} />
+                      )}
+                    </>
                   )}
                 </div>
               </div>

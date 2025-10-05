@@ -159,7 +159,7 @@ ${
       messages: finalMessages,
     });
 
-    // Respond with the stream
+    // Return the standard AI SDK response
     return result.toAIStreamResponse();
   } catch (error) {
     console.error("Error calling Groq API:", error);
