@@ -49,7 +49,6 @@ export default function SoraPage() {
   }, [textInput, append]);
 
   useEffect(() => {
-    console.log("Messages:", messages);
     // auto scroll
     const el = messagesContainerRef.current;
     if (el) {
