@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Mic, MicOff, Bot, Send, Trash2 } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { EnhancedAudioPlayer } from "@/components/enhanced-audio-player";
 import { usePersistedChat } from "@/hooks/use-persisted-chat";
 import { WebResultCards } from "@/components/web-result-cards";
+import React from "react";
 
 export default function SoraPage() {
   const t = useTranslations("Sora");
@@ -44,6 +45,10 @@ export default function SoraPage() {
     }
   }, [textInput, append]);
 
+  useEffect(() => {
+    console.log("Messages:", messages);
+  }, [messages]);
+
 
   const toggleListening = async () => {
     if (isListening) {
@@ -66,7 +71,7 @@ export default function SoraPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground">
+    <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
       <header className="sticky top-0 z-10 flex items-center justify-between p-4 border-b bg-background/80 backdrop-blur-sm">
         <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
         <div className="flex items-center gap-2">
@@ -89,7 +94,7 @@ export default function SoraPage() {
 
       <main className="flex-1 flex flex-col items-center p-4 overflow-hidden">
         <div className="w-full max-w-3xl flex-1 flex flex-col min-h-0">
-          <div className="flex-1 space-y-4 overflow-y-auto p-4 rounded-xl bg-muted/50 mb-4">
+          <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 rounded-xl bg-muted/50 mb-4">
             {messages.length === 0 && !isLoading && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground px-4">
                 <Bot size={64} className="mb-4 text-primary" />
@@ -97,8 +102,7 @@ export default function SoraPage() {
                 <p className="text-sm opacity-75">{t("placeholder")}</p>
               </div>
             )}
-
-            {messages.map((m: Message) => (
+            {messages.map((m: Message, idx: number) => (
               <div
                 key={m.id}
                 className={`flex gap-3 items-start ${
@@ -126,18 +130,11 @@ export default function SoraPage() {
                         messageId={m.id}
                       />
                       {(() => {
-                        try {
-                          type MaybeWithData = Message & { data?: unknown };
-                          const raw = (m as MaybeWithData).data as string | undefined;
-                          if (!raw) return null;
-                          const parsed = JSON.parse(raw);
-                          console.log("Parsed data:", parsed);
-                          if (Array.isArray(parsed?.webSearchResults) && parsed.webSearchResults.length > 0) {
-                            console.log("Web search results:", parsed.webSearchResults);
-                            return <WebResultCards results={parsed.webSearchResults} />;
-                          }
-                        } catch {}
-                        return null;
+                        
+                        // Fallback: fetch web results directly using previous user message
+                        const lastUserBefore = [...messages].slice(0, idx).reverse().find((x) => x.role === "user");
+                        if (!lastUserBefore?.content) return null;
+                        return <LazyWebResults query={lastUserBefore.content} locale={locale} />;
                       })()}
                     </>
                   )}
@@ -166,7 +163,7 @@ export default function SoraPage() {
           </div>
 
           {/* Input area */}
-          <div className="border-t bg-background pt-4">
+          <div className="border-t bg-background pt-4 sticky bottom-0">
             <div className="flex items-center justify-center mb-3">
               <button
                 onClick={toggleListening}
@@ -234,4 +231,62 @@ export default function SoraPage() {
       </main>
     </div>
   );
+}
+
+function LazyWebResults({ query, locale }: { query: string; locale: string }) {
+  const [results, setResults] = React.useState<{ title: string; url: string; snippet: string; image?: string }[] | null>(null);
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        // Simple sessionStorage cache to avoid repeated searches on the same query/locale
+        const cacheKey = `web_results_${locale}_${query}`;
+        try {
+          const cached = sessionStorage.getItem(cacheKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length >= 0) {
+              if (!cancelled) {
+                setResults(parsed);
+                setLoaded(true);
+              }
+              return;
+            }
+          }
+        } catch {}
+
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "";
+        const res = await fetch(`${baseUrl}/api/webSearch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, locale }),
+        });
+        if (!res.ok) {
+          setLoaded(true);
+          return;
+        }
+        const data = await res.json();
+        if (!cancelled) {
+          const list = (data?.results ?? []) as { title: string; url: string; snippet: string; image?: string }[];
+          setResults(Array.isArray(list) && list.length > 0 ? list : []);
+          setLoaded(true);
+          try {
+            sessionStorage.setItem(cacheKey, JSON.stringify(list ?? []));
+          } catch {}
+        }
+      } catch {
+        if (!cancelled) setLoaded(true);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [query, locale]);
+
+  if (!loaded) return null;
+  if (!results || results.length === 0) return null;
+  return <WebResultCards results={results} />;
 }

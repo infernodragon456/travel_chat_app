@@ -5,16 +5,11 @@ const withNextIntl = createNextIntlPlugin("./i18n.ts");
 
 const nextConfig: NextConfig = {
   images: {
+    // Allow images from any HTTPS domain to cover all web search thumbnails
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'images.unsplash.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'unsplash.com',
+        hostname: '**',
         port: '',
         pathname: '/**',
       },

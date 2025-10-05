@@ -1,3 +1,8 @@
+/* Prevent page scroll; chat list will manage its own scrolling */
+html, body {
+  overscroll-behavior: none;
+  overflow-y: hidden;
+}
 @import "tailwindcss";
 @import "tw-animate-css";
 

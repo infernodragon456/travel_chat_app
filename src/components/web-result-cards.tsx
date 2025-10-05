@@ -34,6 +34,7 @@ export function WebResultCard({ result }: WebResultCardProps) {
               width={64}
               height={64}
               className="w-16 h-16 object-cover rounded-md"
+              unoptimized
               onError={(e) => {
                 // Hide image if it fails to load
                 e.currentTarget.style.display = 'none';

@@ -186,8 +186,12 @@ export async function POST(req: Request) {
               if (searchData && Array.isArray(searchData.results)) {
                 webSearchResults = searchData.results as WebSearchResult[];
                 if (webSearchResults.length > 0) {
-                  data.append(JSON.stringify({ webSearchResults }));
+                  // Emit structured data so the client receives it on the assistant message
+                  data.append({ webSearchResults });
+                  // Also include a fallback shape some clients expect
+                  data.append({ results: webSearchResults });
                 }
+                console.log("webSearchResults:", webSearchResults);
               }
             } catch (err) {
               console.error("Error executing web search tool call:", err);
