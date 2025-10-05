@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Mic, MicOff, Bot, Send, Trash2 } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -13,6 +13,7 @@ import { EnhancedAudioPlayer } from "@/components/enhanced-audio-player";
 import { usePersistedChat } from "@/hooks/use-persisted-chat";
 import { WebResultCards } from "@/components/web-result-cards";
 import React from "react";
+import ReactMarkdown from "react-markdown";
 
 export default function SoraPage() {
   const t = useTranslations("Sora");
@@ -38,6 +39,8 @@ export default function SoraPage() {
 
   const { clearChat } = usePersistedChat(locale, messages, setMessages);
 
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+
   const handleSendMessage = useCallback(() => {
     if (textInput.trim()) {
       append({ role: "user", content: textInput });
@@ -47,6 +50,11 @@ export default function SoraPage() {
 
   useEffect(() => {
     console.log("Messages:", messages);
+    // auto scroll
+    const el = messagesContainerRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }
   }, [messages]);
 
 
@@ -54,9 +62,8 @@ export default function SoraPage() {
     if (isListening) {
       const transcription = await stopListening();
       if (transcription) {
-        // Send the transcribed text directly to the chat
         append({ role: "user", content: transcription });
-        setTranscript(""); // Clear the transcript after sending
+        setTranscript(""); 
       }
     } else {
       startListening();
@@ -94,7 +101,7 @@ export default function SoraPage() {
 
       <main className="flex-1 flex flex-col items-center p-4 overflow-hidden">
         <div className="w-full max-w-3xl flex-1 flex flex-col min-h-0">
-          <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 rounded-xl bg-muted/50 mb-4">
+          <div ref={messagesContainerRef} className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 rounded-xl bg-muted/50 mb-4">
             {messages.length === 0 && !isLoading && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground px-4">
                 <Bot size={64} className="mb-4 text-primary" />
@@ -121,7 +128,7 @@ export default function SoraPage() {
                       : "bg-card border shadow-sm"
                   }`}
                 >
-                  <p className="whitespace-pre-wrap">{m.content}</p>
+                  <ReactMarkdown className="whitespace-pre-wrap break-words">{m.content}</ReactMarkdown>
                   {m.role === "assistant" && (
                     <>
                       <EnhancedAudioPlayer
@@ -131,7 +138,7 @@ export default function SoraPage() {
                       />
                       {(() => {
                         
-                        // Fallback: fetch web results directly using previous user message
+                        // fetch web results directly using previous user message
                         const lastUserBefore = [...messages].slice(0, idx).reverse().find((x) => x.role === "user");
                         if (!lastUserBefore?.content) return null;
                         return <LazyWebResults query={lastUserBefore.content} locale={locale} />;
@@ -174,7 +181,7 @@ export default function SoraPage() {
                     : "bg-primary hover:bg-primary/90 shadow-md"
                 }`}
                 title={
-                  isProcessing ? "Processing..." : "Record audio (Whisper)"
+                  isProcessing ? "Processing..." : "Record audio"
                 }
               >
                 {isListening && (
@@ -195,7 +202,7 @@ export default function SoraPage() {
                 {isListening
                   ? "Recording..."
                   : isProcessing
-                  ? "Transcribing with Whisper..."
+                  ? "Transcribing..."
                   : ""}
                 {transcript && ` "${transcript}"`}
               </div>
@@ -258,7 +265,7 @@ function LazyWebResults({ query, locale }: { query: string; locale: string }) {
         } catch {}
 
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "";
-        const res = await fetch(`${baseUrl}/api/webSearch`, {
+        const res = await fetch(`${baseUrl}/api/webSearchGuarded`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query, locale }),
@@ -268,12 +275,13 @@ function LazyWebResults({ query, locale }: { query: string; locale: string }) {
           return;
         }
         const data = await res.json();
+        const shouldShow = Boolean(data?.shouldShowResults);
+        const list = (data?.results ?? []) as { title: string; url: string; snippet: string; image?: string }[];
         if (!cancelled) {
-          const list = (data?.results ?? []) as { title: string; url: string; snippet: string; image?: string }[];
-          setResults(Array.isArray(list) && list.length > 0 ? list : []);
+          setResults(shouldShow && Array.isArray(list) && list.length > 0 ? list : []);
           setLoaded(true);
           try {
-            sessionStorage.setItem(cacheKey, JSON.stringify(list ?? []));
+            sessionStorage.setItem(cacheKey, JSON.stringify(shouldShow ? list ?? [] : []));
           } catch {}
         }
       } catch {

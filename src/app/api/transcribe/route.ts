@@ -1,5 +1,3 @@
-// API endpoint for Whisper-based transcription using official Hugging Face Inference API
-// Uses direct fetch to HF Inference API with proper FormData format
 export const runtime = "edge";
 
 export async function POST(req: Request) {
@@ -19,7 +17,6 @@ export async function POST(req: Request) {
       sizeKB: (audioFile.size / 1024).toFixed(2) + " KB",
     });
 
-    // Validate audio file size
     if (audioFile.size < 1000) {
       console.error("❌ Audio file too small (< 1KB)");
       return new Response(
@@ -41,7 +38,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Check if Hugging Face API token is available
     if (!process.env.HF_TOKEN) {
       return new Response(
         JSON.stringify({
@@ -52,13 +48,11 @@ export async function POST(req: Request) {
       );
     }
 
-    // Get locale from form data (if provided)
     const locale = (formData.get("locale") as string) || "en";
     const languageCode = locale === "ja" ? "japanese" : "english";
 
     console.log("🌐 Transcribing in:", languageCode);
 
-    // Convert audio file to ArrayBuffer for binary upload
     const audioBuffer = await audioFile.arrayBuffer();
 
     console.log("📤 Sending to HF Inference API:", {
@@ -68,16 +62,15 @@ export async function POST(req: Request) {
       bufferSize: audioBuffer.byteLength,
     });
 
-    // Call Hugging Face Inference API with binary audio data
     const response = await fetch(
       "https://api-inference.huggingface.co/models/openai/whisper-large-v3",
       {
         method: "POST",
         headers: {
           Authorization: `Bearer ${process.env.HF_TOKEN}`,
-          "Content-Type": "audio/wav", // Send as binary audio data
+          "Content-Type": "audio/wav", 
         },
-        body: audioBuffer, // Send raw binary data
+        body: audioBuffer, 
       }
     );
 
@@ -95,7 +88,6 @@ export async function POST(req: Request) {
     const result = await response.json();
     console.log("✅ Transcription result:", result);
 
-    // Extract text from HF API response
     let transcriptionText = "";
     if (result.text) {
       transcriptionText = result.text;
@@ -105,7 +97,6 @@ export async function POST(req: Request) {
       transcriptionText = result;
     }
 
-    // Check if transcription is suspiciously short (hallucination detection)
     if (
       transcriptionText &&
       transcriptionText.trim().length < 3 &&

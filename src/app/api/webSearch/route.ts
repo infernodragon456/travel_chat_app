@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { JWT } from "google-auth-library";
 
-// A consistent interface for our search results (no change needed here)
 interface WebSearchResult {
   title: string;
   url: string;
@@ -9,7 +8,6 @@ interface WebSearchResult {
   image?: string;
 }
 
-// Minimal Google Custom Search response types (only the fields we use)
 interface GoogleCseImage {
   src: string;
 }
@@ -37,7 +35,6 @@ async function getAccessToken() {
   
   const credentials = JSON.parse(credentialsJson);
 
-  // Define the scope required for the Custom Search API
   const scopes = ["https://www.googleapis.com/auth/cse"];
   
   const auth = new JWT({
@@ -70,10 +67,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Search API is not configured." }, { status: 500 });
     }
 
-    // Get an OAuth2 access token
     const token = await getAccessToken();
 
-    // Construct the Google Custom Search API URL (without the API key)
+      // Construct the Google Custom Search API URL (without the API key)
     const url = new URL("https://www.googleapis.com/customsearch/v1");
     url.searchParams.set("cx", searchEngineId);
     url.searchParams.set("q", query);
@@ -97,14 +93,12 @@ export async function POST(req: NextRequest) {
 
     const data: GoogleResponse = await response.json();
 
-    // Map the Google API response to our simple, consistent format
     const results: WebSearchResult[] = (data.items ?? [])
       .slice(0, 3)
       .map((item: GoogleItem) => ({
         title: item.title,
         url: item.link,
         snippet: item.snippet,
-        // Safely access the thumbnail image from the pagemap
         image: item.pagemap?.cse_image?.[0]?.src,
       }));
 

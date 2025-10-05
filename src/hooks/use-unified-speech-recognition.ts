@@ -5,16 +5,10 @@ import { useLocale, useTranslations } from "next-intl";
 
 // ================== HELPER FUNCTIONS (RE-ADDED) ==================
 
-/**
- * Encodes a raw AudioBuffer into a WAV file (Blob) optimized for Whisper.
- * Converts to mono, 16kHz sample rate for better Whisper compatibility.
- */
 function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
-  // Whisper works best with mono, 16kHz audio
   const targetSampleRate = 16000;
   const numberOfChannels = 1; // Convert to mono
   
-  // Resample if needed
   let processedBuffer = audioBuffer;
   if (audioBuffer.sampleRate !== targetSampleRate || audioBuffer.numberOfChannels !== numberOfChannels) {
     processedBuffer = resampleAudioBuffer(audioBuffer, targetSampleRate, numberOfChannels);
@@ -30,7 +24,6 @@ function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
     }
   };
 
-  // WAV header
   writeString(0, "RIFF");
   view.setUint32(4, 36 + length * numberOfChannels * 2, true);
   writeString(8, "WAVE");
@@ -45,7 +38,6 @@ function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
   writeString(36, "data");
   view.setUint32(40, length * numberOfChannels * 2, true);
 
-  // PCM data
   let offset = 44;
   for (let i = 0; i < length; i++) {
     for (let channel = 0; channel < numberOfChannels; channel++) {
@@ -65,10 +57,7 @@ function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
   return new Blob([buffer], { type: "audio/wav" });
 }
 
-/**
- * Simple resampling function to convert audio to target sample rate and channels.
- * This is a basic implementation - for production use, consider a more sophisticated resampler.
- */
+
 function resampleAudioBuffer(
   audioBuffer: AudioBuffer, 
   targetSampleRate: number, 
@@ -85,7 +74,6 @@ function resampleAudioBuffer(
   
   const newBuffer = audioContext.createBuffer(targetChannels, newLength, targetSampleRate);
   
-  // Convert to mono if needed
   if (targetChannels === 1 && audioBuffer.numberOfChannels > 1) {
     const mixedChannel = newBuffer.getChannelData(0);
     for (let i = 0; i < newLength; i++) {
@@ -97,7 +85,7 @@ function resampleAudioBuffer(
       mixedChannel[i] = sum / audioBuffer.numberOfChannels;
     }
   } else {
-    // Copy first channel
+    // copy first channel
     const sourceChannel = audioBuffer.getChannelData(0);
     const targetChannel = newBuffer.getChannelData(0);
     for (let i = 0; i < newLength; i++) {
@@ -110,9 +98,7 @@ function resampleAudioBuffer(
   return newBuffer;
 }
 
-/**
- * Decodes any audio blob into a raw AudioBuffer and then converts it to a WAV Blob.
- */
+
 async function convertToWav(audioBlob: Blob): Promise<Blob> {
   try {
     const AudioContextClass =
@@ -134,8 +120,6 @@ async function convertToWav(audioBlob: Blob): Promise<Blob> {
 
 // ================== SPEECH RECOGNITION HOOK ==================
 
-// Type declarations for Web Speech API (fallback)
-// ... (interfaces remain the same, not shown for brevity)
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList;
 }
@@ -163,7 +147,6 @@ interface SpeechRecognition extends EventTarget {
   start(): void;
   stop(): void;
 }
-// Extend Window interface for Web Speech API
 declare global {
   interface Window {
     SpeechRecognition?: new () => SpeechRecognition;
@@ -188,16 +171,10 @@ export const useUnifiedSpeechRecognition = () => {
     async (audioBlob: Blob): Promise<string | null> => {
       try {
         console.log("🔄 Converting audio to optimized WAV (mono, 16kHz) for Whisper...");
-        // ================== OPTIMIZED FOR WHISPER ==================
-        // Convert the recorded blob to WAV format optimized for Whisper:
-        // - Mono channel (better for speech recognition)
-        // - 16kHz sample rate (optimal for Whisper)
-        // - 16-bit PCM encoding
         const wavBlob = await convertToWav(audioBlob);
         const audioFile = new File([wavBlob], "recording.wav", {
           type: "audio/wav",
         });
-        // ================== END OF OPTIMIZATION ===================
 
         console.log("📤 Sending WAV audio to Whisper API:", {
           name: audioFile.name,
@@ -230,9 +207,8 @@ export const useUnifiedSpeechRecognition = () => {
     [locale]
   );
 
-  // Fallback to Web Speech API
+  // fallback to Web Speech API
   const transcribeWithWebSpeech = useCallback((): Promise<string | null> => {
-    // ... (This function remains the same)
     return new Promise((resolve) => {
       const SpeechRecognition =
         window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -249,7 +225,7 @@ export const useUnifiedSpeechRecognition = () => {
     });
   }, [locale]);
 
-  // Start recording audio
+  // start recording audio
   const startListening = useCallback(async () => {
     try {
       setError(null);
@@ -260,12 +236,10 @@ export const useUnifiedSpeechRecognition = () => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      // ================== FIX IS HERE ==================
-      // 1. Explicitly find a supported MIME type
       const supportedTypes = [
         "audio/webm;codecs=opus",
         "audio/webm",
-        "audio/mp4", // Often supported in Safari/Chrome
+        "audio/mp4", 
       ];
       const mimeType = supportedTypes.find((type) =>
         MediaRecorder.isTypeSupported(type)
@@ -280,9 +254,7 @@ export const useUnifiedSpeechRecognition = () => {
 
       console.log(`🎙️ Using supported audio format: ${mimeType}`);
 
-      // 2. Pass the chosen mimeType to the MediaRecorder constructor
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      // ================== END OF FIX ===================
 
       mediaRecorderRef.current = mediaRecorder;
 
@@ -301,7 +273,6 @@ export const useUnifiedSpeechRecognition = () => {
     }
   }, [t]);
 
-  // Stop recording and transcribe
   const stopListening = useCallback(async (): Promise<string | null> => {
     return new Promise((resolve) => {
       if (

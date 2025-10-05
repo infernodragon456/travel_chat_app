@@ -261,7 +261,7 @@ export function EnhancedAudioPlayer({
         )}
 
         <span className="text-xs text-muted-foreground">
-          {useWebSpeech ? "Web TTS" : "AI TTS"}
+          {useWebSpeech ? locale === "ja" ? "ウェブTTS" : "Web TTS" : locale === "ja" ? "人工知能TTS" : "AI TTS"}
         </span>
       </div>
     </div>

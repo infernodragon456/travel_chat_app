@@ -1,7 +1,6 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { streamText, StreamData, generateText } from "ai";
 import { StreamingTextResponse } from "ai";
-// zod no longer needed here
 
 export const runtime = "edge";
 
@@ -18,7 +17,7 @@ type WebSearchResult = {
 // --- HELPER FUNCTIONS ---
 
 
-// Geocodes a location name to latitude and longitude using OpenStreetMap
+// geocoder function
 async function geocodeLocation(
   locationName: string
 ): Promise<{ lat: number; lon: number } | null> {
@@ -28,7 +27,7 @@ async function geocodeLocation(
     )}&format=json&limit=1`;
     const response = await fetch(url, {
       headers: {
-        "User-Agent": "SoraAIApp/1.0", // A unique user-agent is required by this API
+        "User-Agent": "SoraAIApp/1.0", // fix for the API
       },
     });
     if (!response.ok) return null;
@@ -46,7 +45,6 @@ async function geocodeLocation(
   }
 }
 
-// Extracts a location name from the user's message using a fast LLM
 async function extractLocation(
   userMessage: string,
   locale: string
@@ -74,7 +72,7 @@ async function extractLocation(
   }
 }
 
-// Performs a web search using our internal /api/webSearch endpoint
+// web search function
 async function searchTheWeb(query: string, locale: string) {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
@@ -101,7 +99,7 @@ export async function POST(req: Request) {
   const { messages, locale } = await req.json();
   const data = new StreamData();
 
-  // --- Step 1: Weather & Location Fetching (Strict Requirement) ---
+  // --- Step 1: Weather & Location Fetching ---
   const lastUserMessage = messages[messages.length - 1]?.content || "";
   const locationName = await extractLocation(lastUserMessage, locale);
   let weatherData: Record<string, unknown> | null = null;
@@ -122,12 +120,11 @@ export async function POST(req: Request) {
     }
   }
 
-  // --- Step 2: Web Search Tool Call (using a powerful model) ---
+  // --- Step 2: Web Search Tool Call ---
   let webSearchResults: WebSearchResult[] = [];
   try {
     console.log("Starting web search tool call via Groq client...");
 
-    // Lazy import OpenAI to avoid type resolution issues on edge runtime
     const { default: OpenAI } = await import("openai");
     const groqClient = new OpenAI({
       apiKey: process.env.GROQ_API_KEY,
@@ -208,12 +205,12 @@ export async function POST(req: Request) {
     console.error("Tool call for web search failed:", error);
   }
 
-  // --- Step 3: Final Text Generation (using a fast model) ---
+  // --- Step 3: Final Text Generation ---
   const systemPrompt = locale === "ja"
-    ? `あなたはSora（ソラ）、親しみやすく役立つライフスタイルアシスタントです...` // (rest of your prompt)
-    : `You are Sora, a friendly and helpful lifestyle assistant...`; // (rest of your prompt)
+    ? `あなたはSora（ソラ）、親しみやすく役立つライフスタイルアシスタントです。天気とユーザーのリクエストに基づいて、創造的で安全でパーソナライズされたアドバイスを提供することが目標です。` 
+    : `You are Sora, a friendly and helpful lifestyle assistant. Your goal is to give creative, safe, and personalized advice based on the weather and the user's request.`; 
 
-  // Construct a final context with all gathered information
+  // construct a final context with all gathered information
   const finalContext = `
     ${systemPrompt}
 
@@ -230,7 +227,7 @@ export async function POST(req: Request) {
     model: groq("llama-3.1-8b-instant"),
     system: finalContext,
     messages: messages,
-    // ✅ FIX 3: Moved onFinish inside the streamText configuration object
+
     onFinish: () => {
       data.close();
     },

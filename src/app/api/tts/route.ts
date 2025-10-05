@@ -1,5 +1,3 @@
-// Text-to-Speech API with ElevenLabs
-// Priority: ElevenLabs TTS (Premium, supports Japanese) > Web Speech API fallback
 
 export const runtime = "edge";
 
@@ -11,7 +9,6 @@ export async function POST(req: Request) {
       return new Response("No text provided", { status: 400 });
     }
 
-    // Try ElevenLabs TTS (Excellent Japanese support!)
     if (process.env.ELEVENLABS_API_KEY) {
       try {
         return await generateWithElevenLabs(text, locale);
@@ -20,7 +17,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // Fallback to Web Speech API (client-side)
     return new Response(
       JSON.stringify({
         error:
@@ -41,7 +37,6 @@ export async function POST(req: Request) {
   }
 }
 
-// ElevenLabs TTS (Premium quality, excellent multilingual support including Japanese!)
 async function generateWithElevenLabs(text: string, locale: string) {
   const apiKey = process.env.ELEVENLABS_API_KEY!;
 
@@ -53,7 +48,7 @@ async function generateWithElevenLabs(text: string, locale: string) {
 
   const requestBody = {
     text,
-    model_id: "eleven_multilingual_v2", // Supports Japanese!
+    model_id: "eleven_multilingual_v2", 
     voice_settings: {
       stability: 0.5,
       similarity_boost: 0.75,
@@ -80,7 +75,6 @@ async function generateWithElevenLabs(text: string, locale: string) {
     throw new Error(`ElevenLabs TTS API error: ${response.statusText}`);
   }
 
-  // ElevenLabs returns raw audio (MP3)
   const audioBuffer = await response.arrayBuffer();
   const base64Audio = Buffer.from(audioBuffer).toString("base64");
 

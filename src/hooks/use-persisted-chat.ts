@@ -21,22 +21,22 @@ export function usePersistedChat(
         console.error("Error loading chat history:", error);
       }
     } else {
-      // Clear messages when switching to a locale with no history
+      // clear messages when switching to a locale with no history
       setMessages([]);
     }
   }, [locale, storageKey, setMessages]);
 
-  // Save messages to localStorage whenever they change
+  // save messages to localStorage whenever they change
   useEffect(() => {
     if (messages.length > 0) {
       localStorage.setItem(storageKey, JSON.stringify(messages));
     }
   }, [messages, storageKey]);
 
-  // Clear chat function
+  // clear chat function
   const clearChat = () => {
     localStorage.removeItem(storageKey);
-    // Also clear audio cache for this locale
+    // clear audio cache for this locale
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith(`audio_`) && key.includes(locale)) {
         localStorage.removeItem(key);

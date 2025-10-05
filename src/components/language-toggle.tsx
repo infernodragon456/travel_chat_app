@@ -17,8 +17,6 @@ export function LanguageToggle() {
   const pathname = usePathname();
 
   const changeLocale = (locale: string) => {
-    // This is a simplified approach. A more robust solution
-    // might be needed depending on the complexity of your routes.
     const newPath = `/${locale}/${pathname.split("/").slice(2).join("/")}`;
     router.replace(newPath);
   };
