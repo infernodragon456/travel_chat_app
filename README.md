@@ -1,22 +1,20 @@
 # Sora (空) - AI Weather & Lifestyle Chatbot
 
-Sora is a voice-enabled AI chatbot designed for the AI Talent Force, Inc. technical assessment. It acts as a daily outing and fashion advisor, providing personalized recommendations based on real-time local weather. Users can interact with Sora in either English or Japanese using only their voice.
-
-https://github.com/vighnesh-007/travel_chat_app/assets/95822134/265355a2-c9ef-4c12-881c-8de1b369e900
+Sora is a voice-enabled AI chatbot designed for the AI Talent Force, Inc. technical assessment. It acts as a daily outing and fashion advisor, providing personalized recommendations based on real-time local weather, and web search results. Users can interact with Sora in either English or Japanese using only their voice, or text.
 
 ## ✨ Features
 
 - **Voice & Text Input**: Full conversation via voice (Whisper AI for all browsers) or text input (always available).
 - **Bilingual Support**: Seamlessly switch between English and Japanese for both input and AI responses.
 - **Location-Based Weather**: Automatically extracts location from your query (e.g., "What should I wear in Tokyo?") and fetches real-time weather data from Open-Meteo.
-- **Personalized AI Suggestions**: Uses Groq's Llama 3 model to provide fast, context-aware advice on clothing, activities, and travel.
+- **WebSearch based AI Suggestions**: Google's Custom Search Engine for Web Search
 - **Modern UI**: Built with Next.js 15, Tailwind CSS, and shadcn/ui for a beautiful, responsive interface with light/dark modes.
 - **Streaming Responses**: AI responses are streamed token-by-token for an engaging, real-time experience.
 - **Privacy-First**: No geolocation permissions required - just mention a city in your query.
 
 ## 🚀 Live Demo
 
-[A live demo will be hosted on Vercel upon completion.]
+[https://travel-chat-app.vercel.app/](https://travel-chat-app.vercel.app/)
 
 ## 🛠️ Tech Stack
 
@@ -24,11 +22,11 @@ https://github.com/vighnesh-007/travel_chat_app/assets/95822134/265355a2-c9ef-4c
 - **Styling**: Tailwind CSS 4 & shadcn/ui
 - **State Management**: React 19 Hooks
 - **Internationalization**: next-intl 4.x
-- **Generative AI**: Groq API (Llama 3.1 8B Instant)
+- **Generative AI**: Groq API (Llama 3.1 8B Instant, OpenAI GPT OSS 20B, Llama 4 Scout 17B 16E Instruct)
 - **AI SDK**: Vercel AI SDK 3.4
 - **Weather API**: Open-Meteo (free, no API key required)
 - **Geocoding**: Nominatim/OpenStreetMap
-- **Voice I/O**: Whisper Large V3 Turbo (Primary) + Web Speech API (Fallback) + Text Input (all browsers)
+- **Voice I/O**: Whisper Large V3 (Primary) + Web Speech API (Fallback) + Text Input (all browsers), 11Labs for TTS
 - **Deployment**: Vercel
 
 ## ⚙️ Getting Started
@@ -56,32 +54,14 @@ npm install
 Create a `.env.local` file in the root of the project:
 
 ```bash
-# Required: Groq API Key
-GROQ_API_KEY=your_groq_api_key_here
-
-# Recommended: Hugging Face Token (for Whisper AI voice transcription)
-# Enables voice input via Whisper Large V3 Turbo in all browsers
-HF_TOKEN=your_huggingface_token_here
-
-# Recommended: ElevenLabs API Key (for high-quality Japanese & English voice output)
-# Simple API key authentication, excellent multilingual support
-ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
+GROQ_API_KEY=
+HF_TOKEN=
+GOOGLE_CLOUD_TTS_API_KEY=
+ELEVENLABS_API_KEY=
+GOOGLE_API_KEY=
+GOOGLE_CX=
+GOOGLE_SERVICE_ACCOUNT_JSON=
 ```
-
-**Get your API keys:**
-
-- **Groq (Required)**: [https://console.groq.com/keys](https://console.groq.com/keys)
-- **Hugging Face (Recommended)**: [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
-  - **Voice Input**: Whisper Large V3 Turbo for speech-to-text
-  - Works in **all browsers** (Chrome, Firefox, Safari, Edge)
-  - **FREE** with generous rate limits
-  - Without this, voice input only works in Chrome/Edge
-- **ElevenLabs (Recommended)**: [https://elevenlabs.io/app/settings/api-keys](https://elevenlabs.io/app/settings/api-keys)
-  - **Voice Output**: Premium AI voices with multilingual support
-  - Excellent Japanese & English pronunciation
-  - Simple API key authentication (works with Edge Runtime)
-  - Free tier: 10,000 characters/month, then ~$1/10K characters
-  - Without this, falls back to Web Speech API (limited Japanese support)
 
 ### 4. Run the development server
 
@@ -98,7 +78,7 @@ The application is a Next.js 15 app with Edge Runtime API routes.
 1. **Client (Browser)**:
    - User types or speaks their query (e.g., "What should I wear in Tokyo today?")
    - **Voice Input Architecture**:
-     - **Primary**: Records audio → sends to Whisper Large V3 Turbo via Hugging Face
+     - **Primary**: Records audio → sends to Whisper Large V3 via Hugging Face
      - **Fallback**: Web Speech API (if Whisper unavailable)
      - **Always Available**: Text input
 2. **Location Extraction**:
@@ -107,22 +87,15 @@ The application is a Next.js 15 app with Edge Runtime API routes.
 3. **Weather Fetching**:
    - Open-Meteo API fetches real-time weather data for the location
 4. **AI Response**:
-   - The server constructs a detailed prompt with weather data
-   - Groq API (Llama 3.1 8B Instant) generates personalized suggestions
+   - The server constructs a detailed prompt with weather data and web search results
+   - OpenAI GPT OSS 20B acts as the web search tool caller, and Llama 3.1 8B Instant extracts location from the user prompt and also returns the final output
    - Response is streamed token-by-token back to the client
 5. **Output**:
    - Streaming text is displayed in a beautiful chat interface
-   - Text-to-Speech reads the response aloud (if supported)
+   - Text-to-Speech reads the response aloud
 
-**Voice Recognition Strategy:**
+**Scope for Future:**
 
-- 🎯 **Primary**: Whisper Large V3 Turbo (Hugging Face) - Works in **all browsers**, more accurate
-- 🔄 **Fallback**: Web Speech API - Only Chrome/Edge, used if Whisper fails
-- ⌨️ **Always Available**: Text input - No API key required
-
-**Other Features:**
-
-- ✅ No geolocation permissions required
-- ✅ Intelligent location extraction from queries
-- ✅ Real-time streaming responses
-- ✅ Bilingual support (EN/JA)
+- TTS takes the whole text at once, and appears slow to the user. Instead can try to stream the TTS response parallely as assistant generates output
+- Web Search guardrails can be improved
+- Allow Google Calendar integration for travel plan sync
